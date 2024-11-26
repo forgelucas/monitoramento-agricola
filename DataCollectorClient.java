@@ -6,17 +6,23 @@ import java.util.Random;
 
 class DataCollectorClient extends Thread {
     private String id;
-    private long clockOffset; // Offset do relógio local em ms
-    private int cycleTime; // Tempo de cada ciclo em ms
+    private long clockOffset;
+    private int cycleTime;
     private String serverAddress;
     private int serverPort;
+    private String cropType;
+    private int maxRounds; // Número máximo de rodadas
+    private int currentRound; // Contador de rodadas
 
-    public DataCollectorClient(String id, String serverAddress, int serverPort) {
+    public DataCollectorClient(String id, String serverAddress, int serverPort, String cropType, int maxRounds) {
         this.id = id;
         this.serverAddress = serverAddress;
         this.serverPort = serverPort;
+        this.cropType = cropType;
         this.clockOffset = randomOffset();
-        this.cycleTime = 10000; // Valor fixo inicial de 10s
+        this.cycleTime = 10000;
+        this.maxRounds = maxRounds;
+        this.currentRound = 0;
     }
 
     private long randomOffset() {
@@ -31,13 +37,13 @@ class DataCollectorClient extends Thread {
         double co2 = 400 + rand.nextDouble() * 100;
         String gpsLocation = "Lat: " + rand.nextDouble() + ", Lon: " + rand.nextDouble();
         long timestamp = System.currentTimeMillis() + clockOffset;
-        return new SensorData(temperature, humidity, co2, gpsLocation, timestamp);
+        return new SensorData(temperature, humidity, co2, gpsLocation, timestamp, cropType);
     }
 
     @Override
     public void run() {
         try {
-            while (true) {
+            while (currentRound < maxRounds) {
                 List<SensorData> batch = new ArrayList<>();
                 int batchSize = 0;
                 while (batchSize < 4096) {
@@ -47,8 +53,12 @@ class DataCollectorClient extends Thread {
                 }
 
                 sendData(batch);
-                Thread.sleep(cycleTime); // Espera pelo próximo ciclo
+                currentRound++;
+                System.out.println("Collector " + id + " completed round " + currentRound);
+                Thread.sleep(cycleTime);
             }
+
+            System.out.println("Collector " + id + " finished after " + maxRounds + " rounds.");
         } catch (InterruptedException | IOException e) {
             System.out.println("Collector " + id + " interrupted.");
         }
@@ -62,8 +72,11 @@ class DataCollectorClient extends Thread {
     }
 
     public static void main(String[] args) {
-        for (int i = 1; i <= 4; i++) {
-            DataCollectorClient collector = new DataCollectorClient("Collector-" + i, "localhost", 8080);
+        String[] crops = {"Milho", "Trigo", "Soja", "Arroz"};
+        int maxRounds = 200; // Limite de rodadas
+
+        for (int i = 0; i < crops.length; i++) {
+            DataCollectorClient collector = new DataCollectorClient("Collector-" + (i + 1), "localhost", 8080, crops[i], maxRounds);
             collector.start();
         }
     }
