@@ -1,9 +1,11 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Date;
 
 class CentralizerServer {
     private static final int PORT = 8080;
@@ -45,13 +47,23 @@ class CentralizerServer {
         }
     }
 
-    private void logData(String collectorId, SensorData data) {
-        try (FileWriter writer = new FileWriter("sensor_data.txt", true)) {
-            writer.write("Collector: " + collectorId + ", Data: " + data + "\n");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+private void logData(String collectorId, SensorData data) {
+    try (FileWriter writer = new FileWriter("sensor_data.txt", true)) {
+        // Formatação do timestamp
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String formattedDate = sdf.format(new Date(data.timestamp)); // Converte o timestamp para uma data legível
+
+        writer.write("Collector: " + collectorId + ", Data: " + 
+                     "Temperature: " + data.temperature + ", " +
+                     "Humidity: " + data.humidity + ", " +
+                     "CO2: " + data.co2 + ", " +
+                     "GPS: " + data.gpsLocation + ", " +
+                     "Timestamp: " + formattedDate + ", " +  // Data formatada
+                     "Crop: " + data.cropType + "\n");
+    } catch (IOException e) {
+        e.printStackTrace();
     }
+}
 
     private void synchronizeClocks() {
         System.out.println("Synchronizing clocks...");

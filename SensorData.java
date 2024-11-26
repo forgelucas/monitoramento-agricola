@@ -2,12 +2,12 @@ import java.io.Serializable;
 
 class SensorData implements Serializable {
     private static final long serialVersionUID = 1L;
-    private double temperature;
-    private double humidity;
-    private double co2;
-    private String gpsLocation;
+    double temperature;
+    double humidity;
+    double co2;
+    String gpsLocation;
     long timestamp;
-    private String cropType; // Novo campo para identificar o tipo de plantação
+    String cropType; // Novo campo para identificar o tipo de plantação
 
     public SensorData(double temperature, double humidity, double co2, String gpsLocation, long timestamp, String cropType) {
         this.temperature = temperature;
