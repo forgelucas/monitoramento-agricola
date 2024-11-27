@@ -2,9 +2,6 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.Date;
 
 class CentralizerServer {
@@ -18,11 +15,10 @@ class CentralizerServer {
     public void startServer() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Centralizer Server is running on port " + PORT);
-            ExecutorService threadPool = Executors.newFixedThreadPool(4);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                threadPool.execute(() -> handleClient(clientSocket));
+                handleClient(clientSocket);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -30,40 +26,65 @@ class CentralizerServer {
     }
 
     private void handleClient(Socket clientSocket) {
-        try (ObjectInputStream inputStream = new ObjectInputStream(clientSocket.getInputStream())) {
-            @SuppressWarnings("unchecked")
-            List<SensorData> dataBatch = (List<SensorData>) inputStream.readObject();
+        try (DataInputStream inputStream = new DataInputStream(clientSocket.getInputStream())) {
+            String clientAddress = clientSocket.getInetAddress().getHostAddress();
 
-            for (SensorData data : dataBatch) {
+            while (true) {
+                SensorData data = readSensorData(inputStream);
+                if (data == null) break; // Conexão encerrada
+
                 long timeDifference = Math.abs(data.timestamp - localTime);
                 if (timeDifference > 1000) {
                     System.out.println("Desync detected. Starting Berkeley sync.");
                     synchronizeClocks();
                 }
-                logData(clientSocket.getInetAddress().getHostAddress(), data);
+                logData(clientAddress, data);
             }
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-private void logData(String collectorId, SensorData data) {
-    try (FileWriter writer = new FileWriter("sensor_data.txt", true)) {
-        // Formatação do timestamp
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String formattedDate = sdf.format(new Date(data.timestamp)); // Converte o timestamp para uma data legível
+    private SensorData readSensorData(DataInputStream inputStream) throws IOException {
+        try {
+            // Lê os campos do SensorData
+            double temperature = inputStream.readDouble();
+            double humidity = inputStream.readDouble();
+            double co2 = inputStream.readDouble();
+            String gpsLocation = readString(inputStream, 64);
+            long timestamp = inputStream.readLong();
+            String cropType = readString(inputStream, 32);
 
-        writer.write("Collector: " + collectorId + ", Data: " + 
-                     "Temperature: " + data.temperature + ", " +
-                     "Humidity: " + data.humidity + ", " +
-                     "CO2: " + data.co2 + ", " +
-                     "GPS: " + data.gpsLocation + ", " +
-                     "Timestamp: " + formattedDate + ", " +  // Data formatada
-                     "Crop: " + data.cropType + "\n");
-    } catch (IOException e) {
-        e.printStackTrace();
+            return new SensorData(temperature, humidity, co2, gpsLocation, timestamp, cropType);
+        } catch (EOFException e) {
+            // Fim do stream
+            return null;
+        }
     }
-}
+
+    private String readString(DataInputStream inputStream, int maxLength) throws IOException {
+        byte[] buffer = new byte[maxLength];
+        inputStream.readFully(buffer);
+        return new String(buffer).trim();
+    }
+
+    private void logData(String collectorId, SensorData data) {
+        try (FileWriter writer = new FileWriter("sensor_data.txt", true)) {
+            // Formatação do timestamp
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            String formattedDate = sdf.format(new Date(data.timestamp)); // Converte o timestamp para uma data legível
+
+            writer.write("Collector: " + collectorId + ", Data: " +
+                         "Temperature: " + data.temperature + ", " +
+                         "Humidity: " + data.humidity + ", " +
+                         "CO2: " + data.co2 + ", " +
+                         "GPS: " + data.gpsLocation + ", " +
+                         "Timestamp: " + formattedDate + ", " +
+                         "Crop: " + data.cropType + "\n");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     private void synchronizeClocks() {
         System.out.println("Synchronizing clocks...");
@@ -72,5 +93,23 @@ private void logData(String collectorId, SensorData data) {
 
     public static void main(String[] args) {
         new CentralizerServer().startServer();
+    }
+}
+
+class SensorData {
+    double temperature;
+    double humidity;
+    double co2;
+    String gpsLocation;
+    long timestamp;
+    String cropType;
+
+    public SensorData(double temperature, double humidity, double co2, String gpsLocation, long timestamp, String cropType) {
+        this.temperature = temperature;
+        this.humidity = humidity;
+        this.co2 = co2;
+        this.gpsLocation = gpsLocation;
+        this.timestamp = timestamp;
+        this.cropType = cropType;
     }
 }
